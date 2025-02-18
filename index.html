@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Snake Game</title>
+  <style>
+    /* Make the background a bit pretty */
+    body {
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #4a90e2, #50e3c2);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: Arial, sans-serif;
+      color: #333;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    /* Center the canvas and give it a nice border */
+    #gameCanvas {
+      background-color: #f5f5f5;
+      border: 5px solid #333;
+      display: block;
+    }
+
+    /* Optional: instructions styling */
+    .overlay {
+      position: absolute;
+      text-align: center;
+      color: #fff;
+      font-size: 24px;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+      width: 100%;
+      top: 40%;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="600" height="600"></canvas>
+<div id="overlay" class="overlay"></div>
+
+<script>
+  // Grab references to the canvas and overlay
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const overlay = document.getElementById('overlay');
+
+  // Game configuration
+  const tileSize = 20;             // Size of each cell in the grid
+  const tilesX = canvas.width / tileSize;
+  const tilesY = canvas.height / tileSize;
+  let gameInterval = null;
+  let gameRunning = false;
+  let gameOver = false;
+
+  // Snake properties
+  let snake = [];
+  let direction = { x: 0, y: 0 };  // The current velocity of the snake
+  let food = { x: 0, y: 0 };
+  let score = 0;
+
+  // Helper function: get random integer in [0, n)
+  function randInt(n) {
+    return Math.floor(Math.random() * n);
+  }
+
+  // Place food at a random location on the board
+  function placeFood() {
+    food.x = randInt(tilesX);
+    food.y = randInt(tilesY);
+
+    // Make sure food isn't placed on the snake
+    // Very basic approach: keep trying if it collides
+    for (let i = 0; i < snake.length; i++) {
+      if (snake[i].x === food.x && snake[i].y === food.y) {
+        placeFood();
+        break;
+      }
+    }
+  }
+
+  // Draw everything on the canvas
+  function drawGame() {
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw snake
+    snake.forEach((part, index) => {
+      ctx.fillStyle = index === 0 ? '#008000' : '#00b300'; // head is darker
+      ctx.fillRect(part.x * tileSize, part.y * tileSize, tileSize, tileSize);
+    });
+
+    // Draw food
+    ctx.fillStyle = '#ff0000';
+    ctx.fillRect(food.x * tileSize, food.y * tileSize, tileSize, tileSize);
+
+    // Draw score
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.font = '20px Arial';
+    ctx.fillText(`Score: ${score}`, 10, 20);
+  }
+
+  // Move snake one step
+  function updateSnake() {
+    // Create new head
+    const head = { 
+      x: snake[0].x + direction.x, 
+      y: snake[0].y + direction.y 
+    };
+
+    // Check boundary collisions
+    if (head.x < 0 || head.x >= tilesX || head.y < 0 || head.y >= tilesY) {
+      endGame();
+      return;
+    }
+
+    // Check self collision
+    for (let i = 0; i < snake.length; i++) {
+      if (snake[i].x === head.x && snake[i].y === head.y) {
+        endGame();
+        return;
+      }
+    }
+
+    // Add new head to the front
+    snake.unshift(head);
+
+    // Check if we found food
+    if (head.x === food.x && head.y === food.y) {
+      score++;
+      placeFood();
+    } else {
+      // Remove the tail if no food eaten
+      snake.pop();
+    }
+  }
+
+  // Main game loop
+  function gameLoop() {
+    if (!gameRunning) return;
+    updateSnake();
+    if (!gameOver) {
+      drawGame();
+    }
+  }
+
+  // Start the game (initialization)
+  function startGame() {
+    // Reset everything
+    gameRunning = true;
+    gameOver = false;
+    score = 0;
+    snake = [];
+
+    // Create an initial snake: let's make it length 3 at the center
+    const centerX = Math.floor(tilesX / 2);
+    const centerY = Math.floor(tilesY / 2);
+    snake.push({ x: centerX, y: centerY });
+    snake.push({ x: centerX, y: centerY + 1 });
+    snake.push({ x: centerX, y: centerY + 2 });
+
+    // Random initial direction
+    const directions = [
+      { x: 1,  y: 0 },
+      { x: -1, y: 0 },
+      { x: 0,  y: 1 },
+      { x: 0,  y: -1 }
+    ];
+    direction = directions[randInt(directions.length)];
+
+    // Place initial food
+    placeFood();
+
+    // Clear overlay
+    overlay.textContent = '';
+
+    // Stop any existing intervals
+    if (gameInterval) {
+      clearInterval(gameInterval);
+    }
+
+    // Set up the game interval (speed: 10 updates per second => 100ms)
+    gameInterval = setInterval(gameLoop, 100);
+  }
+
+  // End the game
+  function endGame() {
+    gameOver = true;
+    gameRunning = false;
+    overlay.textContent = 'Game Over! Press Space to Restart';
+    clearInterval(gameInterval);
+  }
+
+  // Handle keyboard events
+  document.addEventListener('keydown', (e) => {
+    if (!gameRunning && !gameOver && e.code === 'Space') {
+      // Start the game from notStarted state
+      startGame();
+    } else if (gameOver && e.code === 'Space') {
+      // Restart after game over
+      startGame();
+    }
+
+    // Controls: WASD
+    if (gameRunning) {
+      // We don't want to allow reversing direction directly, so check
+      switch(e.key.toLowerCase()) {
+        case 'z': // up
+          if (direction.y !== 1) {
+            direction = { x: 0, y: -1 };
+          }
+          break;
+        case 'q': // left
+          if (direction.x !== 1) {
+            direction = { x: -1, y: 0 };
+          }
+          break;
+        case 's': // down
+          if (direction.y !== -1) {
+            direction = { x: 0, y: 1 };
+          }
+          break;
+        case 'd': // right
+          if (direction.x !== -1) {
+            direction = { x: 1, y: 0 };
+          }
+          break;
+        default:
+          break;
+      }
+    }
+  });
+
+  // Initial overlay message
+  overlay.textContent = 'Press Space to Start';
+</script>
+
+</body>
+</html>
